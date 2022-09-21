@@ -42,12 +42,17 @@ class Main():
         self.next_f = ''
         self.last_time = time.time()
         self.jm = -1
+        self.xy = -1
 
     def start(self):
         # 加载按钮
         self.button_list = [
             Button('start', '重新开始', (GAME_WH + 50, 150)),
-            Button('ai', '电脑托管', (GAME_WH + 50, 250)),
+            Button('ai', 'AI自动', (GAME_WH + 50, 250)),
+            Button('m-ai','AI辅助',(GAME_WH+50,350)),
+        ]
+        self.input_cell = [
+            InputBox(pygame.Rect(GAME_WH + 50, 450,100,50)),
         ]
         self.run()
 
@@ -56,17 +61,27 @@ class Main():
             if self.game.state in ['over', 'win']:
                 self.state = self.game.state
             self.my_event()
+            # 有下一步操作建议且在手动运行状态或AI托管状态,则按照建议进行操作
             if self.next_f != '' and (
                     self.state == 'run' or self.state == 'ai' and time.time() - self.last_time > self.step_time):
                 self.game.run(self.next_f)
+                self.input_cell[0].text = str(self.next_f)
                 self.next_f = ''
+                self.last_time = time.time()
+            elif self.next_f != '' and (
+                    self.state == 'run' or self.state == 'm-ai' and time.time() - self.last_time > self.step_time):
+                self.game.run_m_ai(self.next_f)
+                self.input_cell[0].text = str(self.next_f)                
+                self.next_f = ''
+                self.state = 'run'
                 self.last_time = time.time()
             elif self.state == 'start':
                 self.game.start()
                 self.state = 'run'
-            self.set_bg((101, 194, 148))
+            self.set_bg((210, 210, 210))
             self.draw_info()
             self.draw_button(self.button_list)
+            self.draw_input(self.input_cell)
             self.draw_map()
             self.update()
         print('退出游戏')
@@ -110,6 +125,7 @@ class Main():
         if self.state == 'ai':
             self.draw_text('间隔：{}'.format(self.step_time), (GAME_WH + 50, 60))
             self.draw_text('评分：{}'.format(self.jm), (GAME_WH + 50, 80))
+        # self.draw_text('xy：{}'.format(self.xy), (GAME_WH + 50, 90))
 
     def set_bg(self, color=(255, 255, 255)):
         self.screen.fill(color)
@@ -126,6 +142,11 @@ class Main():
                 pygame.draw.rect(self.screen, (180, 180, 200),
                                  (b.x, b.y, b.w, b.h))
                 self.draw_text(b.text, (b.x + b.w / 2, b.y + 9), size=18, center='center')
+
+    def draw_input(self,inputs):
+        for i in inputs:
+            # i.dealEvent(event)
+            i.draw(self.screen)
 
     def draw_text(self, text, xy, color=(0, 0, 0), size=18, center=None):
         font = pygame.font.SysFont('simhei', round(size))
@@ -155,6 +176,8 @@ class Main():
     def my_event(self):
         if self.state == 'ai' and self.next_f == '':
             self.next_f, self.jm = self.ai.get_next(self.game.grid.tiles)
+        if self.state == 'm-ai' and self.next_f == '':
+            self.next_f, self.jm = self.ai.get_next(self.game.grid.tiles)
         for event in pygame.event.get():
             if event.type == QUIT:
                 self.state = 'exit'
@@ -169,6 +192,7 @@ class Main():
                     self.next_f = 'D'
                 elif event.key in [K_UP, K_w] and self.state == 'run':
                     self.next_f = 'U'
+                #  k 快,l 慢  ai模式时调整移动快慢
                 elif event.key in [K_k, K_l] and self.state == 'ai':
                     if event.key == K_k and self.step_time > 0:
                         self.step_time *= 0.9
@@ -179,8 +203,20 @@ class Main():
                             self.step_time = 0.01
                     if self.step_time < 0:
                         self.step_time = 0
-
+                for i in self.input_cell:
+                    if(i.active):
+                        if(event.key == pygame.K_RETURN):
+                            print(i.text)
+                            # self.text=''
+                        elif(event.key == pygame.K_BACKSPACE):
+                            i.text = i.text[:-1]
+                        else:
+                            i.text += event.unicode
+            # if event.type == MOUSEMOTION:
             if event.type == MOUSEBUTTONDOWN:
+                self.xy = str(event.pos)
+                self.game.grid.xy = event.pos
+                self.game.grid.add_manual_tile(event.pos)
                 for i in self.button_list:
                     if i.is_click(event.pos):
                         self.state = i.name
@@ -190,8 +226,20 @@ class Main():
                         elif i.name == 'run':
                             i.name = 'ai'
                             i.text = '电脑托管'
-                        break
+                        elif i.name == 'm-ai':
+                            self.state = 'm-ai'
+                            i.text = '下一步'
+                        
+                # for i in self.block:
 
+                for i in self.input_cell:
+                    if(i.boxBody.collidepoint(event.pos)):  # 若按下鼠标且位置在文本框
+                        i.active = not i.active
+                    else:
+                        i.active = False
+                    i.color = i.color_active if(i.active) else i.color_inactive        
+                break                
+                                
 
 def run():
     Main().start()
@@ -212,6 +260,43 @@ class Button(pygame.sprite.Sprite):
                 self.x <= xy[0] <= self.x + self.w and
                 self.y <= xy[1] <= self.y + self.h)
 
+
+class InputBox:
+    def __init__(self, rect: pygame.Rect = pygame.Rect(100, 100, 140, 32)) -> None:
+        self.boxBody: pygame.Rect = rect
+        self.color_inactive = pygame.Color('lightskyblue3')  # 未被选中的颜色
+        self.color_active = pygame.Color('dodgerblue2')  # 被选中的颜色
+        self.color = self.color_inactive  # 当前颜色，初始为未激活颜色
+        self.active = False
+        self.text = ''
+        self.done = False
+        self.font = pygame.font.Font(None, 32)
+    
+    def dealEvent(self, event: pygame.event.Event):
+        if(event.type == pygame.MOUSEBUTTONDOWN):
+            if(self.boxBody.collidepoint(event.pos)):  # 若按下鼠标且位置在文本框
+                self.active = not self.active
+            else:
+                self.active = False
+            self.color = self.color_active if(
+                self.active) else self.color_inactive
+        if(event.type == pygame.KEYDOWN):  # 键盘输入响应
+            if(self.active):
+                if(event.key == pygame.K_RETURN):
+                    print(self.text)
+                    # self.text=''
+                elif(event.key == pygame.K_BACKSPACE):
+                    self.text = self.text[:-1]
+                else:
+                    self.text += event.unicode
+    
+    def draw(self, screen: pygame.surface.Surface):
+        txtSurface = self.font.render(
+            self.text, True, self.color)  # 文字转换为图片
+        width = max(120, txtSurface.get_width()+10)  # 当文字过长时，延长文本框
+        self.boxBody.w = width
+        screen.blit(txtSurface, (self.boxBody.x+5, self.boxBody.y+5))
+        pygame.draw.rect(screen, self.color, self.boxBody, 2)
 
 if __name__ == '__main__':
     run()

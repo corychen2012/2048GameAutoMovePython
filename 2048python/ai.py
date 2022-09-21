@@ -7,6 +7,9 @@ config = Base()
 
 
 def get_grid(tiles, directions):
+    """
+    
+    """
     g = Grid(config.SIZE)
     g.tiles = tiles.copy()
     for direction in directions:
@@ -35,6 +38,9 @@ class Ai:
         self.g = Grid(config.SIZE)
 
     def get_next(self, tiles):
+        """
+        传入表盘状态,返回操作建议及对应分数("方向",分数)
+        """
         score_list = []
         tn = self.get_tile_num(tiles)
         if tn >= self.g.size ** 2 / 3:
@@ -45,7 +51,8 @@ class Ai:
             for i in range(kn):
                 t_g = get_grid(tiles, directions)
                 fen.append(self.get_score(t_g))
-            print(directions, min(fen))
+            run_fen = round(min(fen))
+            # print(directions,run_fen) # 预测操作顺序及对应分数
             score_list.append([directions, min(fen)])
         score_list = sorted(score_list, key=(lambda x: [x[1]]))
         # print(score_list)
@@ -63,7 +70,7 @@ class Ai:
         # return max(bjs)
         a = self.get_bj2__4(tiles)
         b = self.get_bj__4(tiles)
-        print(a, b)
+        # print(a, b)
         return a * 2.8 + b
 
     def debug(self, tiles):
@@ -95,6 +102,9 @@ class Ai:
 
     # 空格子数量
     def get_tile_num(self, tiles):
+        """
+        表格内空格数量
+        """
         # l = len(tiles)
         n = 0
         for row in tiles:
